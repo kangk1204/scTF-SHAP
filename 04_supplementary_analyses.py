@@ -506,7 +506,7 @@ for _, row in pt_val_df.sort_values(['treatment', 'prop_irf8']).iterrows():
 # FINAL SUMMARY
 ###############################################################################
 print("\n" + "=" * 70)
-print("FINAL SUMMARY FOR MANUSCRIPT")
+print("FINAL SUMMARY")
 print("=" * 70)
 
 print("\n1. DOUBLET/CONTAMINATION CHECK:")
