@@ -20,7 +20,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Set paths
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(BASE_DIR, 'analysis')
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -236,7 +236,7 @@ print("=" * 80)
 
 # Load the CD8+ T cell data directly using h5py (to bypass anndata version issues)
 print("\nLoading CD8+ T cell expression data via h5py...")
-h5_path = f'{OUT_DIR}/adata_cd8_processed.h5ad'
+h5_path = f'{OUT_DIR}/adata_cd8_subtypes.h5ad'
 
 with h5py.File(h5_path, 'r') as f:
     # Read raw expression matrix (dense float32 array)

@@ -38,7 +38,7 @@ from statsmodels.stats.multitest import multipletests
 import gzip
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(BASE_DIR, 'analysis')
 os.makedirs(OUT_DIR, exist_ok=True)
 FIG_DIR = os.path.join(BASE_DIR, 'figures')
