@@ -16,8 +16,8 @@ This repository contains all analysis code for the manuscript. The pipeline:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/kangk1204/scTF-SHAP.git
+cd scTF-SHAP
 ```
 
 ### 2. Set up Python environment
