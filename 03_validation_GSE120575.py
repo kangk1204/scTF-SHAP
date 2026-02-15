@@ -12,10 +12,6 @@ warnings.filterwarnings('ignore')
 import pandas as pd
 import numpy as np
 import scanpy as sc
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.stats import mannwhitneyu, fisher_exact
 from statsmodels.stats.multitest import multipletests
 import os
@@ -24,15 +20,7 @@ import gzip
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(BASE_DIR, 'analysis')
 os.makedirs(OUT_DIR, exist_ok=True)
-FIG_DIR = os.path.join(BASE_DIR, 'figures')
-os.makedirs(FIG_DIR, exist_ok=True)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-
-plt.rcParams.update({
-    'font.size': 8, 'font.family': 'Arial',
-    'figure.dpi': 300, 'savefig.dpi': 300, 'savefig.bbox': 'tight',
-    'axes.linewidth': 0.5,
-})
 
 ###############################################################################
 # STEP 1: Load GSE120575 data
@@ -345,110 +333,6 @@ for ml in merged_labels:
     for tf in available_tfs:
         merged_stats[ml][tf] = adata_cd8[mask, tf].X.mean()
     print(f"  {ml}: n={n} (Post={merged_stats[ml]['post_pct']:.1f}%)")
-
-# Generate Supplementary Figure: Validation (with merged labels)
-fig, axes = plt.subplots(1, 3, figsize=(11, 3.5))
-
-# Define consistent color palette for merged subtypes (match discovery cohort style)
-merged_color_map = {
-    'IRF8-high': '#E31A1C',
-    'Exhausted (TOX-hi)': '#FF7F00',
-    'Memory (TCF7+)': '#33A02C',
-    'Cytotoxic (ID2+PRDM1+)': '#1F78B4',
-    'Innate-like (ID2+)': '#A6CEE3',
-    'Effector (PRDM1+)': '#6A3D9A',
-    'Effector': '#B2DF8A',
-}
-
-# Panel A: UMAP colored by merged subtype label
-ax = axes[0]
-# Order for legend: IRF8-high first (our key finding)
-label_order = ['IRF8-high', 'Exhausted (TOX-hi)', 'Memory (TCF7+)',
-               'Cytotoxic (ID2+PRDM1+)', 'Innate-like (ID2+)',
-               'Effector (PRDM1+)', 'Effector']
-label_order = [l for l in label_order if l in set(adata_cd8.obs['subtype_label'])]
-
-for lbl in label_order:
-    mask = (adata_cd8.obs['subtype_label'] == lbl).values
-    n = mask.sum()
-    color = merged_color_map.get(lbl, '#999999')
-    ax.scatter(
-        adata_cd8.obsm['X_umap_tf'][mask, 0], adata_cd8.obsm['X_umap_tf'][mask, 1],
-        s=2, alpha=0.6, c=color, label=f'{lbl} ({n})',
-        rasterized=True
-    )
-ax.set_title('Validation: CD8+ T cell subtypes\n(GSE120575, Sade-Feldman et al.)', fontsize=8)
-ax.set_xlabel('UMAP1', fontsize=7)
-ax.set_ylabel('UMAP2', fontsize=7)
-ax.set_xticks([])
-ax.set_yticks([])
-ax.legend(fontsize=5.5, markerscale=3, frameon=False, loc='best', handletextpad=0.2)
-ax.text(-0.05, 1.05, 'A', transform=ax.transAxes, fontsize=11, fontweight='bold', va='top')
-
-# Panel B: IRF8 expression violin Pre vs Post
-ax = axes[1]
-if 'IRF8' in adata_cd8.var_names:
-    plot_data = pd.DataFrame({
-        'IRF8': adata_cd8[:, 'IRF8'].X.flatten(),
-        'Treatment': ['Pre' if t == 'Pre' else 'Post' for t in adata_cd8.obs['treatment']]
-    })
-    treat_pal = {'Pre': '#4575B4', 'Post': '#D73027'}
-    sns.violinplot(data=plot_data, x='Treatment', y='IRF8', palette=treat_pal,
-                   ax=ax, linewidth=0.5, inner=None, cut=0)
-    # Add jitter
-    for treat, color in [('Pre', '#4575B4'), ('Post', '#D73027')]:
-        sub = plot_data[plot_data['Treatment'] == treat]
-        if len(sub) > 200:
-            sub = sub.sample(200, random_state=42)
-        x_idx = 0 if treat == 'Pre' else 1
-        jitter = np.random.normal(0, 0.05, len(sub))
-        ax.scatter(x_idx + jitter, sub['IRF8'].values, s=0.5, alpha=0.3, c=color, rasterized=True)
-
-    # Significance
-    stat, pval = mannwhitneyu(
-        plot_data[plot_data['Treatment'] == 'Pre']['IRF8'],
-        plot_data[plot_data['Treatment'] == 'Post']['IRF8'],
-        alternative='two-sided'
-    )
-    sig = '***' if pval < 0.001 else ('**' if pval < 0.01 else ('*' if pval < 0.05 else 'ns'))
-    y_max = plot_data['IRF8'].max() * 1.05
-    ax.text(0.5, y_max, sig, ha='center', fontsize=8, fontweight='bold')
-    ax.set_title(f'IRF8 expression in CD8+ T cells\n(p = {pval:.2e})', fontsize=8)
-    ax.set_ylabel('IRF8 expression (log1p TPM)', fontsize=7)
-ax.text(-0.12, 1.05, 'B', transform=ax.transAxes, fontsize=11, fontweight='bold', va='top')
-
-# Panel C: Treatment composition bar chart (merged subtypes)
-ax = axes[2]
-comp_data = []
-for lbl in label_order:
-    ms = merged_stats[lbl]
-    comp_data.append({
-        'Subtype': f'{lbl}\n(n={ms["n"]})',
-        'Pre': ms['pre_n'] / ms['n'] * 100,
-        'Post': ms['post_n'] / ms['n'] * 100,
-        'color': merged_color_map.get(lbl, '#999999'),
-    })
-comp_df = pd.DataFrame(comp_data)
-# Sort by Post% descending
-comp_df = comp_df.sort_values('Post', ascending=True).reset_index(drop=True)
-
-y_pos = range(len(comp_df))
-ax.barh(y_pos, comp_df['Pre'].values, color='#4575B4', label='Pre-tx', edgecolor='white', linewidth=0.3)
-ax.barh(y_pos, comp_df['Post'].values, left=comp_df['Pre'].values,
-        color='#D73027', label='Post-tx', edgecolor='white', linewidth=0.3)
-ax.set_yticks(y_pos)
-ax.set_yticklabels(comp_df['Subtype'].values, fontsize=6.5)
-ax.set_xlabel('Percentage (%)', fontsize=7)
-ax.set_title('Validation: Treatment composition', fontsize=8)
-ax.legend(fontsize=6, frameon=False, loc='lower right')
-ax.axvline(x=50, color='grey', linestyle='--', linewidth=0.3, alpha=0.5)
-ax.text(-0.15, 1.05, 'C', transform=ax.transAxes, fontsize=11, fontweight='bold', va='top')
-
-plt.tight_layout()
-fig.savefig(f'{FIG_DIR}/FigureS1_validation.tiff', dpi=300, format='tiff')
-fig.savefig(f'{FIG_DIR}/FigureS1_validation.pdf', dpi=300, format='pdf')
-plt.close()
-print("  Supplementary Figure S1 saved.")
 
 ###############################################################################
 # Summary
