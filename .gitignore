@@ -1,0 +1,24 @@
+# Data (too large for GitHub; download from GEO)
+data/
+
+# Outputs (reproducible from scripts)
+analysis/
+figures/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
