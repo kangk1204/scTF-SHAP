@@ -145,14 +145,9 @@ def assign_cd8_labels(adata_cd8_sub, subtype_col='tf_subtype_v2'):
             if tf in adata_cd8_sub.var_names:
                 cd8_sub_stats[st][tf.lower()] = adata_cd8_sub[mask, tf].X.mean()
 
-    irf8_max_cluster = max(cd8_sub_stats, key=lambda k: cd8_sub_stats[k]['irf8'])
-    irf8_max_value = cd8_sub_stats[irf8_max_cluster]['irf8']
-    irf8_high_exists = irf8_max_value > 0.3
-    print(f"  IRF8 anchor cluster: {irf8_max_cluster} (mean IRF8={irf8_max_value:.3f})")
-
     cd8_labels = {}
     for st, stats in sorted(cd8_sub_stats.items()):
-        if irf8_high_exists and st == irf8_max_cluster:
+        if stats['irf8'] > 0.3:
             label = 'IRF8-high'
         elif stats.get('memory', 0) > 0.3 and stats['tcf7'] > 0.5:
             label = 'Memory (TCF7+)'
@@ -351,12 +346,15 @@ tf_cd8 = pd.read_csv(f'{OUT_DIR}/tf_importance_T_CD8.csv')
 top_cd8_tfs = tf_cd8.head(15)['TF'].tolist()
 available_cd8_tfs = [tf for tf in top_cd8_tfs if tf in adata_cd8_sub.var_names]
 
-# Cache version string: encodes pipeline parameters so cache is invalidated on changes
-CD8_CACHE_VERSION = f"tfs={'|'.join(sorted(available_cd8_tfs))};res=0.25;seed=42;n_pcs=10;n_neighbors=15"
+# Cache version string: encodes pipeline + labeling rule so cache is invalidated on logic changes
+CD8_LABEL_RULE_VERSION = "irf8_gt_0.3_multicluster"
+CD8_CACHE_VERSION_BASE = f"tfs={'|'.join(sorted(available_cd8_tfs))};res=0.25;seed=42;n_pcs=10;n_neighbors=15"
+CD8_CACHE_VERSION = f"{CD8_CACHE_VERSION_BASE};label_rule={CD8_LABEL_RULE_VERSION}"
 _cached_version = adata_cd8_sub.uns.get('cache_version', '') if 'cache_version' in adata_cd8_sub.uns else ''
+_cached_version_ok = _cached_version in {CD8_CACHE_VERSION, CD8_CACHE_VERSION_BASE}
 
 if 'tf_subtype_v2' in adata_cd8_sub.obs.columns and 'subtype_label' in adata_cd8_sub.obs.columns \
-        and 'X_umap_tf' in adata_cd8_sub.obsm and _cached_version == CD8_CACHE_VERSION:
+        and 'X_umap_tf' in adata_cd8_sub.obsm and _cached_version_ok:
     print("\nUsing cached CD8 clustering from h5ad...")
     cd8_labels_v2 = dict(zip(adata_cd8_sub.obs['tf_subtype_v2'], adata_cd8_sub.obs['subtype_label']))
     # Re-compute stats for printing
@@ -372,6 +370,10 @@ if 'tf_subtype_v2' in adata_cd8_sub.obs.columns and 'subtype_label' in adata_cd8
         post_pct = (adata_cd8_sub.obs.loc[mask, 'treatment.group'] != 'treatment.naive').mean() * 100
         print(f"  CD8 subtype {st}: n={cd8_sub_stats[st]['n']}, post%={post_pct:.0f}, "
               f"IRF8={cd8_sub_stats[st]['irf8']:.2f}, TOX={cd8_sub_stats[st]['tox']:.2f} -> {label}")
+    # Promote legacy cache key to explicit rule-aware cache key
+    if _cached_version != CD8_CACHE_VERSION:
+        adata_cd8_sub.uns['cache_version'] = CD8_CACHE_VERSION
+        adata_cd8_sub.write(f'{OUT_DIR}/adata_cd8_subtypes.h5ad')
 else:
     print("\nRe-clustering CD8+ T cells (res=0.25, seed=42)...")
     adata_cd8_tf = adata_cd8_sub[:, available_cd8_tfs].copy()
@@ -924,6 +926,7 @@ print(f"  CD8+ T cells: {adata_cd8_val.n_obs}")
 
 # TF-based subclustering (cached for reproducibility)
 VAL_CACHE = f'{OUT_DIR}/adata_cd8_val_cached.h5ad'
+VAL_LABEL_RULE_VERSION = "irf8_gt_0.3_multicluster"
 tf_cd8_discovery = pd.read_csv(f'{OUT_DIR}/tf_importance_T_CD8.csv')
 top_cd8_tfs_val = tf_cd8_discovery.head(15)['TF'].tolist()
 available_tfs_val = [tf for tf in top_cd8_tfs_val if tf in adata_cd8_val.var_names]
@@ -931,9 +934,10 @@ available_tfs_val = [tf for tf in top_cd8_tfs_val if tf in adata_cd8_val.var_nam
 if os.path.exists(VAL_CACHE):
     print("  Using cached validation CD8 clustering...")
     _val_cache = sc.read_h5ad(VAL_CACHE)
+    _cached_val_label_rule = _val_cache.uns.get('label_rule_version', VAL_LABEL_RULE_VERSION)
     # Align cached labels to current cells
     common_cached = adata_cd8_val.obs_names.intersection(_val_cache.obs_names)
-    if len(common_cached) == adata_cd8_val.n_obs:
+    if len(common_cached) == adata_cd8_val.n_obs and _cached_val_label_rule == VAL_LABEL_RULE_VERSION:
         adata_cd8_val.obs['tf_subtype'] = _val_cache.obs.loc[adata_cd8_val.obs_names, 'tf_subtype'].values
         adata_cd8_val.obs['subtype_label'] = _val_cache.obs.loc[adata_cd8_val.obs_names, 'subtype_label'].values
         adata_cd8_val.obs['response_binary'] = _val_cache.obs.loc[adata_cd8_val.obs_names, 'response_binary'].values
@@ -944,7 +948,7 @@ if os.path.exists(VAL_CACHE):
             irf8_mean = adata_cd8_val[mask, 'IRF8'].X.mean() if 'IRF8' in adata_cd8_val.var_names else 0
             print(f"  Val CD8 subtype {st}: n={mask.sum()}, IRF8={irf8_mean:.2f} -> {val_labels[st]}")
     else:
-        print(f"  Cache cell mismatch ({len(common_cached)} vs {adata_cd8_val.n_obs}), re-clustering...")
+        print(f"  Cache mismatch (cells/rule). Re-clustering validation CD8...")
         os.remove(VAL_CACHE)
         # Fall through to re-clustering below
 
@@ -974,14 +978,9 @@ if 'tf_subtype' not in adata_cd8_val.obs.columns:
             'post_pct': (adata_cd8_val.obs.loc[mask, 'treatment'] == 'Post').mean() * 100,
         }
 
-    val_irf8_max_cluster = max(val_subtype_stats, key=lambda k: val_subtype_stats[k]['irf8'])
-    val_irf8_max_value = val_subtype_stats[val_irf8_max_cluster]['irf8']
-    val_irf8_high_exists = val_irf8_max_value > 0.3
-    print(f"  Validation IRF8 anchor cluster: {val_irf8_max_cluster} (mean IRF8={val_irf8_max_value:.3f})")
-
     val_labels = {}
     for st, stats in sorted(val_subtype_stats.items()):
-        if val_irf8_high_exists and st == val_irf8_max_cluster:
+        if stats['irf8'] > 0.3:
             val_labels[st] = 'IRF8-high'
         elif stats['tcf7'] > 0.5:
             val_labels[st] = 'Memory (TCF7+)'
@@ -1017,6 +1016,7 @@ if 'tf_subtype' not in adata_cd8_val.obs.columns:
     adata_cd8_val.obs['response_binary'] = resp.map(resp_map)
 
     # Save cache for reproducibility
+    adata_cd8_val.uns['label_rule_version'] = VAL_LABEL_RULE_VERSION
     adata_cd8_val.write(VAL_CACHE)
     print("  Validation CD8 clustering saved to adata_cd8_val_cached.h5ad")
 

@@ -286,8 +286,6 @@ print("=" * 60)
 
 # Assign labels to subtypes using same logic as discovery
 labels = {}
-# Keep one IRF8-high cluster per cohort: the maximum-IRF8 cluster only.
-irf8_high_exists = irf8_max > 0.3
 for st, stats in sorted(subtype_stats.items()):
     irf8 = stats.get('IRF8', 0)
     tox = stats.get('TOX', 0)
@@ -295,7 +293,7 @@ for st, stats in sorted(subtype_stats.items()):
     prdm1 = stats.get('PRDM1', 0)
     id2 = stats.get('ID2', 0)
 
-    if irf8_high_exists and st == irf8_high_cluster:
+    if irf8 > 0.3:
         labels[st] = 'IRF8-high'
     elif tcf7 > 0.5:
         labels[st] = 'Memory (TCF7+)'
