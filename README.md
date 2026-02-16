@@ -1,66 +1,95 @@
-# IRF8-High CD8+ T Cell Subtype Discovery in the Melanoma Tumor Microenvironment
+# IRF8-High CD8+ T Cell Subtype Discovery (scTF-SHAP)
 
-Single-cell RNA-seq analysis pipeline that identifies a novel **IRF8-high CD8+ T cell subtype** in the melanoma tumor microenvironment using random forest classification and SHAP-based transcription factor (TF) ranking, validated across three independent cohorts.
+Single-cell RNA-seq analysis pipeline for discovering and validating an **IRF8-high CD8+ T cell subtype** in melanoma.
 
-## Overview
+This repository includes:
+- end-to-end analysis scripts (`01` to `11`)
+- reproducible intermediate outputs (`analysis/`)
+- publication-ready figures (`figures/`)
 
-This repository contains all analysis code for the manuscript. The pipeline:
+## What This Pipeline Does
 
-1. Trains a random forest classifier to distinguish cell types, then uses SHAP values to rank identity-determining TFs
-2. Discovers CD8+ T cell subtypes by clustering on the top SHAP-ranked TFs
-3. Identifies an IRF8-high subtype with unique exhaustion and XCL1/XCL2 chemokine expression
-4. Validates findings across three independent melanoma scRNA-seq cohorts
+1. Trains a Random Forest model on TF expression.
+2. Uses SHAP to rank identity-driving TFs.
+3. Discovers CD8+ and malignant subtypes using top SHAP TFs.
+4. Validates findings in two independent cohorts (GSE120575, GSE72056).
+5. Performs pseudotime, DEG, and enrichment analyses.
+6. Generates all manuscript figures (Figure 1-4, Figure S1-S5).
 
-## Quick Start
+## System Requirements
 
-### 1. Clone the repository
+- Python 3.9+
+- RAM: 16 GB recommended
+- Disk: about 2 GB (raw data) + about 1 GB (outputs)
+- OS: macOS/Linux tested
+
+## Repository Structure
+
+```text
+scTF-SHAP/
+├── 01_tf_ml_analysis.py
+├── 02_subtype_discovery.py
+├── 03_validation_GSE120575.py
+├── 04_supplementary_analyses.py
+├── 05_additional_analyses.py
+├── 06_all_celltype_subclustering.py
+├── 07_doublet_detection.py
+├── 08_diffusion_pseudotime_irf8.py
+├── 09_final_figures.py
+├── 10_gse72056_validation.py
+├── 11_irf8_target_enrichment.py
+├── requirements.txt
+├── data/        # input files from GEO (you create this)
+├── analysis/    # intermediate outputs (auto-generated)
+└── figures/     # final figures (auto-generated)
+```
+
+## Step-by-Step (Beginner Friendly)
+
+### 1. Clone repository
 
 ```bash
 git clone https://github.com/kangk1204/scTF-SHAP.git
 cd scTF-SHAP
 ```
 
-### 2. Set up Python environment
-
-Python **3.9 or higher** is required. We recommend using a virtual environment:
+### 2. Create and activate virtual environment
 
 ```bash
-# Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate    # macOS/Linux
-# venv\Scripts\activate     # Windows
+source venv/bin/activate
+```
 
-# Install all dependencies
+Windows (PowerShell):
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 3. Download raw data from GEO
+### 4. Prepare data folder and download GEO files
 
-Download the following files and place them in a `data/` folder at the repository root:
+Create `data/` at repository root and place the exact files below:
 
-```
-<repo-root>/
-├── data/                          ← Create this folder
-│   ├── GSE115978_tpm.csv.gz
-│   ├── GSE115978_cell.annotations.csv.gz
-│   ├── GSE120575_Sade_Feldman_melanoma_single_cells_TPM_GEO.txt.gz
-│   ├── GSE120575_patient_ID_single_cells.txt.gz
-│   └── GSE72056_melanoma_single_cell_revised_v2.txt.gz
-├── 01_tf_ml_analysis.py
-├── ...
-```
+| File name | GEO accession |
+|---|---|
+| `GSE115978_tpm.csv.gz` | GSE115978 |
+| `GSE115978_cell.annotations.csv.gz` | GSE115978 |
+| `GSE120575_Sade_Feldman_melanoma_single_cells_TPM_GEO.txt.gz` | GSE120575 |
+| `GSE120575_patient_ID_single_cells.txt.gz` | GSE120575 |
+| `GSE72056_melanoma_single_cell_revised_v2.txt.gz` | GSE72056 |
 
-| File | GEO Accession | Download from |
-|------|---------------|---------------|
-| `GSE115978_tpm.csv.gz` | [GSE115978](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE115978) | Supplementary file |
-| `GSE115978_cell.annotations.csv.gz` | [GSE115978](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE115978) | Supplementary file |
-| `GSE120575_Sade_Feldman_melanoma_single_cells_TPM_GEO.txt.gz` | [GSE120575](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE120575) | Supplementary file |
-| `GSE120575_patient_ID_single_cells.txt.gz` | [GSE120575](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE120575) | Supplementary file |
-| `GSE72056_melanoma_single_cell_revised_v2.txt.gz` | [GSE72056](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE72056) | Supplementary file |
+GEO links:
+- https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE115978
+- https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE120575
+- https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE72056
 
-### 4. Run the pipeline
-
-Run scripts **in numeric order**. Each script prints progress to the terminal.
+### 5. Run scripts in this exact order
 
 ```bash
 python 01_tf_ml_analysis.py
@@ -71,76 +100,60 @@ python 05_additional_analyses.py
 python 06_all_celltype_subclustering.py
 python 07_doublet_detection.py
 python 08_diffusion_pseudotime_irf8.py
-python 10_gse72056_validation.py      # Run BEFORE 09
+python 10_gse72056_validation.py
 python 11_irf8_target_enrichment.py
-python 09_final_figures.py             # Run LAST (generates all figures)
+python 09_final_figures.py
 ```
 
-> **Important:** Script `10` must run before `09`, because `09_final_figures.py` uses the Tirosh validation results saved by `10_gse72056_validation.py`.
+Important:
+- Run `10_gse72056_validation.py` **before** `09_final_figures.py`.
+- Run `09_final_figures.py` **last**.
 
-Or run the entire pipeline at once:
+### 6. Check outputs
 
-```bash
-for script in 01 02 03 04 05 06 07 08 10 11 09; do
-    echo "=== Running ${script}*.py ==="
-    python ${script}*.py
-done
-```
+After completion:
+- `analysis/` contains CSV/H5AD intermediate results.
+- `figures/` contains:
+  - `Figure1.*` to `Figure4.*`
+  - `FigureS1.*` to `FigureS5.*`
+  - each in `.pdf` and `.tiff`
 
-### 5. Check outputs
+## Key Outputs by Script
 
-After the pipeline completes, two output folders will be created:
+| Script | Main outputs |
+|---|---|
+| `01_tf_ml_analysis.py` | `tf_importance_*.csv`, `tf_treatment_changes_all.csv`, `cd8_tf_treatment_changes.csv` |
+| `02_subtype_discovery.py` | `adata_cd8_subtypes.h5ad`, `adata_mal_subtypes.h5ad`, subtype summary CSVs |
+| `03_validation_GSE120575.py` | validation subtype/treatment statistics |
+| `04_supplementary_analyses.py` | contamination and pseudoreplication checks |
+| `05_additional_analyses.py` | `irf8high_deg_*.csv`, `irf8high_pathway_*.csv`, response association outputs |
+| `06_all_celltype_subclustering.py` | `subclustering_*_summary.csv` and cluster DEGs |
+| `07_doublet_detection.py` | scrublet-based doublet statistics |
+| `08_diffusion_pseudotime_irf8.py` | `dpt_subtype_pseudotime_stats.csv`, `dpt_irf8_vs_subtypes_tests.csv`, related DPT outputs |
+| `10_gse72056_validation.py` | `adata_cd8_tirosh.h5ad`, `tirosh_irf8_degs.csv`, `tirosh_fig_data.json` |
+| `11_irf8_target_enrichment.py` | `irf8_target_enrichment_results.csv`, `irf8_target_correlations.csv` |
+| `09_final_figures.py` | all main/supplementary figures in `figures/` |
 
-```
-<repo-root>/
-├── analysis/    ← Intermediate results (CSVs, h5ad files, statistics)
-├── figures/     ← Publication-ready figures (PDF + TIFF)
-```
+## Troubleshooting
 
-**Generated figures:**
-| File | Description |
-|------|-------------|
-| `Figure1.*` | RF-SHAP method and TF ranking |
-| `Figure2.*` | CD8+ T cell subtype discovery and pseudotime |
-| `Figure3.*` | IRF8-high characterization (DEGs, pathways) |
-| `Figure4.*` | XCL1/XCL2 functional axis |
-| `FigureS1.*` | TF expression and lineage markers |
-| `FigureS2.*` | Pseudotime details |
-| `FigureS3.*` | Validation cohort (GSE120575) details |
-| `FigureS4.*` | Tirosh cohort (GSE72056) validation |
-| `FigureS5.*` | Treatment changes and malignant subtypes |
+### Error: file not found in `data/`
+- Check file names match exactly (including `.gz` and capitalization).
+- Confirm files are in `scTF-SHAP/data/`.
 
-## Pipeline Details
+### Error during figure generation (`09_final_figures.py`)
+- Usually caused by missing upstream outputs.
+- Re-run scripts in the required order (especially `10`, `11`, then `09`).
 
-| # | Script | What it does | Key outputs |
-|---|--------|-------------|-------------|
-| 01 | `01_tf_ml_analysis.py` | Trains RF classifier on all cell types; computes SHAP TF importance | `tf_importance_*.csv` |
-| 02 | `02_subtype_discovery.py` | Clusters CD8+ T cells and malignant cells using top 15 SHAP TFs | `adata_cd8_subtypes.h5ad`, `adata_mal_subtypes.h5ad` |
-| 03 | `03_validation_GSE120575.py` | Validates subtypes in Sade-Feldman et al. (GSE120575) | Validation statistics |
-| 04 | `04_supplementary_analyses.py` | Contamination checks, patient-level pseudoreplication analysis | Quality control results |
-| 05 | `05_additional_analyses.py` | DEG analysis, pathway enrichment, response association | `irf8high_deg_*.csv`, `irf8high_pathway_*.csv` |
-| 06 | `06_all_celltype_subclustering.py` | TF-based subclustering for all cell types (CD4, B, macrophage, etc.) | `subclustering_*_summary.csv` |
-| 07 | `07_doublet_detection.py` | Scrublet doublet detection; tests IRF8-high enrichment | Doublet statistics |
-| 08 | `08_diffusion_pseudotime_irf8.py` | Diffusion pseudotime ordering of CD8+ T cells | `dpt_subtype_pseudotime_stats.csv`, `dpt_irf8_vs_subtypes_tests.csv` |
-| 10 | `10_gse72056_validation.py` | Third-cohort validation in Tirosh et al. (GSE72056) | `adata_cd8_tirosh.h5ad`, `tirosh_irf8_degs.csv` |
-| 11 | `11_irf8_target_enrichment.py` | Fisher's exact test for IRF8 target gene enrichment | `irf8_target_enrichment_results.csv` |
-| 09 | `09_final_figures.py` | Generates all publication figures (Figs 1-4, S1-S5) | `figures/*.pdf`, `figures/*.tiff` |
+### Memory issues
+- Close other large processes.
+- Use a machine with >=16 GB RAM.
 
 ## Data Sources
 
-| Dataset | Reference | Role | Cells |
-|---------|-----------|------|-------|
-| GSE115978 | Jerby-Arnon et al., *Cell* 2018 | Discovery cohort | 7,186 |
-| GSE120575 | Sade-Feldman et al., *Cell* 2018 | Validation cohort 1 | 16,291 |
-| GSE72056 | Tirosh et al., *Science* 2016 | Validation cohort 2 | 4,645 |
+- Discovery: Jerby-Arnon et al., Cell 2018 (GSE115978)
+- Validation 1: Sade-Feldman et al., Cell 2018 (GSE120575)
+- Validation 2: Tirosh et al., Science 2016 (GSE72056)
 
-## System Requirements
+## Citation
 
-- **Python**: 3.9+
-- **RAM**: 16 GB recommended (scRNA-seq data loading)
-- **Disk**: ~2 GB for raw data, ~1 GB for outputs
-- **OS**: Tested on macOS and Linux
-
-## License
-
-See manuscript for citation details.
+If you use this pipeline, please cite the associated manuscript and source datasets above.
