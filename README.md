@@ -121,7 +121,7 @@ After the pipeline completes, two output folders will be created:
 | 05 | `05_additional_analyses.py` | DEG analysis, pathway enrichment, response association | `irf8high_deg_*.csv`, `irf8high_pathway_*.csv` |
 | 06 | `06_all_celltype_subclustering.py` | TF-based subclustering for all cell types (CD4, B, macrophage, etc.) | `subclustering_*_summary.csv` |
 | 07 | `07_doublet_detection.py` | Scrublet doublet detection; tests IRF8-high enrichment | Doublet statistics |
-| 08 | `08_diffusion_pseudotime_irf8.py` | Diffusion pseudotime ordering of CD8+ T cells | `irf8_pseudotime_analysis.csv` |
+| 08 | `08_diffusion_pseudotime_irf8.py` | Diffusion pseudotime ordering of CD8+ T cells | `dpt_subtype_pseudotime_stats.csv`, `dpt_irf8_vs_subtypes_tests.csv` |
 | 10 | `10_gse72056_validation.py` | Third-cohort validation in Tirosh et al. (GSE72056) | `adata_cd8_tirosh.h5ad`, `tirosh_irf8_degs.csv` |
 | 11 | `11_irf8_target_enrichment.py` | Fisher's exact test for IRF8 target gene enrichment | `irf8_target_enrichment_results.csv` |
 | 09 | `09_final_figures.py` | Generates all publication figures (Figs 1-4, S1-S5) | `figures/*.pdf`, `figures/*.tiff` |

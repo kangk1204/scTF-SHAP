@@ -13,7 +13,8 @@ Date: 2026-02-14
 import pandas as pd
 import numpy as np
 from scipy import stats
-import h5py
+from scipy import sparse
+import scanpy as sc
 from statsmodels.stats.multitest import multipletests
 import os
 import warnings
@@ -234,28 +235,32 @@ print("\n\n" + "=" * 80)
 print("COMPLEMENTARY ANALYSIS: IRF8 EXPRESSION vs DEG SIGNATURE CORRELATION")
 print("=" * 80)
 
-# Load the CD8+ T cell data directly using h5py (to bypass anndata version issues)
-print("\nLoading CD8+ T cell expression data via h5py...")
+# Load CD8+ T cell expression data
+print("\nLoading CD8+ T cell expression data...")
 h5_path = f'{OUT_DIR}/adata_cd8_subtypes.h5ad'
-
-with h5py.File(h5_path, 'r') as f:
-    # Read raw expression matrix (dense float32 array)
-    X_raw = f['raw']['X'][:]  # shape: (n_cells, n_genes)
-    
-    # Read gene names from raw
-    var_names_raw = f['raw']['var']['_index'][:]
-    if isinstance(var_names_raw[0], bytes):
-        var_names_raw = [v.decode() for v in var_names_raw]
-    
-    # Read cell barcodes
-    obs_index = f['obs']['_index'][:]
-    if isinstance(obs_index[0], bytes):
-        obs_index = [v.decode() for v in obs_index]
+adata_expr = sc.read_h5ad(h5_path)
+if adata_expr.raw is not None:
+    X_raw = adata_expr.raw.X
+    var_names_raw = adata_expr.raw.var_names.astype(str).tolist()
+    print("  Using `.raw` matrix from adata_cd8_subtypes.h5ad")
+else:
+    X_raw = adata_expr.X
+    var_names_raw = adata_expr.var_names.astype(str).tolist()
+    print("  `.raw` not found; using `.X` matrix from adata_cd8_subtypes.h5ad")
+obs_index = adata_expr.obs_names.astype(str).tolist()
 
 print(f"Loaded: {X_raw.shape[0]} cells x {X_raw.shape[1]} genes")
 
 # Create gene name to index mapping
 gene_to_idx = {g: i for i, g in enumerate(var_names_raw)}
+
+
+def get_gene_vector(x_mat, gene_idx):
+    """Return a dense 1D expression vector for one gene index."""
+    vec = x_mat[:, gene_idx]
+    if sparse.issparse(vec):
+        return vec.toarray().ravel()
+    return np.asarray(vec).ravel()
 
 # Find shared DEGs (upregulated in both cohorts)
 shared_up_degs = disc_up & val_up
@@ -263,7 +268,7 @@ print(f"Shared upregulated DEGs (both cohorts): {len(shared_up_degs)}")
 
 # Get IRF8 expression
 irf8_idx = gene_to_idx['IRF8']
-irf8_expr = X_raw[:, irf8_idx]
+irf8_expr = get_gene_vector(X_raw, irf8_idx)
 print(f"IRF8 expression range: [{irf8_expr.min():.3f}, {irf8_expr.max():.3f}]")
 print(f"IRF8 expressing cells: {(irf8_expr > 0).sum()} / {len(irf8_expr)} ({(irf8_expr > 0).mean()*100:.1f}%)")
 
@@ -275,7 +280,7 @@ print("\nComputing Spearman correlations for all shared DEGs...")
 corr_results = []
 for gene in shared_degs_in_data:
     gene_idx = gene_to_idx[gene]
-    gene_expr = X_raw[:, gene_idx]
+    gene_expr = get_gene_vector(X_raw, gene_idx)
     r, p = stats.spearmanr(irf8_expr, gene_expr)
     corr_results.append({'gene': gene, 'spearman_r': r, 'pvalue': p})
 
