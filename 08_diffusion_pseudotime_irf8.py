@@ -223,17 +223,23 @@ print("\n[5] Setting root cell to Memory/TCF7+ cluster...")
 
 # Find the cell in the Memory/TCF7+ cluster with highest TCF7 expression
 memory_mask = adata_cd8.obs['subtype_label'] == 'Memory (TCF7+)'
-if memory_mask.sum() == 0:
-    raise RuntimeError("No cells labelled 'Memory (TCF7+)' found. "
-                       "Check subtype labelling before running pseudotime.")
+if 'TCF7' not in adata_cd8.var_names:
+    raise RuntimeError("TCF7 not found in expression matrix; cannot define pseudotime root.")
 tcf7_idx = list(adata_cd8.var_names).index('TCF7')
 tcf7_expr = np.asarray(adata_cd8.X[:, tcf7_idx]).flatten()
+used_memory_label_root = memory_mask.sum() > 0
 
-# Among memory cells, find the one with highest TCF7
-memory_indices = np.where(memory_mask.values)[0]
-memory_tcf7 = tcf7_expr[memory_indices]
-root_local = np.argmax(memory_tcf7)
-root_cell_idx = memory_indices[root_local]
+if used_memory_label_root:
+    # Among memory-labelled cells, choose the highest TCF7 cell
+    memory_indices = np.where(memory_mask.values)[0]
+    memory_tcf7 = tcf7_expr[memory_indices]
+    root_local = np.argmax(memory_tcf7)
+    root_cell_idx = memory_indices[root_local]
+else:
+    # Fallback for robustness: if no Memory label exists, use global max TCF7 cell
+    print("    WARNING: no 'Memory (TCF7+)' label found; using global max-TCF7 cell as root.")
+    root_cell_idx = int(np.argmax(tcf7_expr))
+
 root_cell_name = adata_cd8.obs_names[root_cell_idx]
 print(f"    Root cell: {root_cell_name} (TCF7 = {tcf7_expr[root_cell_idx]:.3f})")
 
@@ -489,17 +495,23 @@ print("=" * 70)
 irf8_rank = list(df_pt_stats['subtype'].values).index('IRF8-high') + 1
 total_subtypes = len(df_pt_stats)
 irf8_mean_pt = df_pt_stats.loc[df_pt_stats['subtype'] == 'IRF8-high', 'mean_pt'].values[0]
-memory_mean_pt = df_pt_stats.loc[df_pt_stats['subtype'] == 'Memory (TCF7+)', 'mean_pt'].values[0]
+memory_rows = df_pt_stats.loc[df_pt_stats['subtype'] == 'Memory (TCF7+)']
+memory_mean_pt = memory_rows['mean_pt'].values[0] if len(memory_rows) > 0 else np.nan
 
 print(f"\n1. PSEUDOTIME POSITIONING:")
 print(f"   - IRF8-high cells rank {irf8_rank}/{total_subtypes} on pseudotime axis (1=earliest)")
 print(f"   - IRF8-high mean pseudotime: {irf8_mean_pt:.4f}")
-print(f"   - Memory (TCF7+) mean pseudotime: {memory_mean_pt:.4f} (root)")
-
-if irf8_mean_pt > memory_mean_pt:
-    pt_position = "LATER than Memory/TCF7+ (more differentiated)"
+if np.isfinite(memory_mean_pt):
+    print(f"   - Memory (TCF7+) mean pseudotime: {memory_mean_pt:.4f} (root)")
 else:
+    print("   - Memory (TCF7+) subtype absent; root was set by max TCF7 fallback.")
+
+if np.isfinite(memory_mean_pt) and irf8_mean_pt > memory_mean_pt:
+    pt_position = "LATER than Memory/TCF7+ (more differentiated)"
+elif np.isfinite(memory_mean_pt):
     pt_position = "EARLIER or SIMILAR to Memory/TCF7+ (less differentiated)"
+else:
+    pt_position = "interpreted relative to max-TCF7 root (Memory label missing)"
 print(f"   - IRF8-high is {pt_position}")
 
 # Check if IRF8 is at intermediate/late/terminal position

@@ -153,21 +153,20 @@ for st in sorted(adata_cd8_tir.obs['tf_subtype'].unique()):
         'id2': float(adata_cd8_tir[mask, 'ID2'].X.mean()) if 'ID2' in adata_cd8_tir.var_names else 0,
     }
 
-# For labeling: use relative IRF8 expression.
-# Find cluster with highest IRF8 — that is the IRF8-high cluster.
-# Other clusters get labeled by their dominant TF.
+# For labeling: use a consistent cross-script rule.
+# One IRF8-high cluster per cohort = cluster with maximum mean IRF8,
+# provided the maximum exceeds a minimum expression threshold.
 irf8_vals = {st: stats['irf8'] for st, stats in tir_subtype_stats.items()}
 max_irf8_cluster = max(irf8_vals, key=irf8_vals.get)
-
-# Only label clusters with mean IRF8 clearly above background as IRF8-high
-# In the discovery cohort, IRF8-high has mean IRF8 = 1.73 while others are < 0.2
-# In this dataset, cluster 3 has IRF8 = 5.79 (clearly IRF8-high) while cluster 2 has IRF8 = 1.30
-# Use threshold of 2.0 to identify genuinely IRF8-high clusters
-irf8_high_threshold = 2.0
+irf8_high_threshold = 0.3
+irf8_high_exists = irf8_vals[max_irf8_cluster] > irf8_high_threshold
+print(f"  IRF8 anchor cluster: {max_irf8_cluster} (mean IRF8={irf8_vals[max_irf8_cluster]:.3f})")
+if not irf8_high_exists:
+    print(f"  WARNING: max IRF8 <= {irf8_high_threshold:.1f}; no IRF8-high label will be assigned.")
 
 tir_labels = {}
 for st, stats in sorted(tir_subtype_stats.items()):
-    if stats['irf8'] >= irf8_high_threshold:
+    if irf8_high_exists and st == max_irf8_cluster:
         tir_labels[st] = 'IRF8-high'
     elif stats['tcf7'] > 1.5 and stats['tox'] < stats['tcf7']:
         tir_labels[st] = 'Memory (TCF7+)'

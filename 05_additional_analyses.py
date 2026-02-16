@@ -22,6 +22,11 @@ OUT_DIR = os.path.join(BASE_DIR, 'analysis')
 os.makedirs(OUT_DIR, exist_ok=True)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
+# Consistent cross-script IRF8-high rule:
+# exactly one IRF8-high cluster per cohort (max mean IRF8),
+# provided that maximum exceeds this minimum threshold.
+IRF8_LABEL_MIN_MEAN = 0.3
+
 ###############################################################################
 # HELPER: Load discovery cohort and re-cluster CD8+ T cells
 ###############################################################################
@@ -78,9 +83,13 @@ def load_discovery_cd8():
             if avail:
                 cd8_sub_stats[st][sig_name] = adata_cd8_sub[mask][:, avail].X.mean()
 
+    irf8_max_cluster = max(cd8_sub_stats, key=lambda k: cd8_sub_stats[k]['irf8'])
+    irf8_max_value = cd8_sub_stats[irf8_max_cluster]['irf8']
+    print(f"  IRF8 anchor cluster: {irf8_max_cluster} (mean IRF8={irf8_max_value:.3f})")
+
     cd8_labels = {}
     for st, stats in sorted(cd8_sub_stats.items()):
-        if stats['irf8'] > 0.3:
+        if st == irf8_max_cluster and irf8_max_value > IRF8_LABEL_MIN_MEAN:
             cd8_labels[st] = 'IRF8-high'
         elif stats.get('memory', 0) > 0.3 and stats['tcf7'] > 0.5:
             cd8_labels[st] = 'Memory (TCF7+)'
@@ -202,9 +211,13 @@ def load_validation_cd8():
             'id2': adata_cd8_val[mask, 'ID2'].X.mean() if 'ID2' in adata_cd8_val.var_names else 0,
         }
 
+    val_irf8_max_cluster = max(val_subtype_stats, key=lambda k: val_subtype_stats[k]['irf8'])
+    val_irf8_max_value = val_subtype_stats[val_irf8_max_cluster]['irf8']
+    print(f"  Validation IRF8 anchor cluster: {val_irf8_max_cluster} (mean IRF8={val_irf8_max_value:.3f})")
+
     val_labels = {}
     for st, stats in sorted(val_subtype_stats.items()):
-        if stats['irf8'] > 0.3:
+        if st == val_irf8_max_cluster and val_irf8_max_value > IRF8_LABEL_MIN_MEAN:
             val_labels[st] = 'IRF8-high'
         elif stats['tcf7'] > 0.5:
             val_labels[st] = 'Memory (TCF7+)'

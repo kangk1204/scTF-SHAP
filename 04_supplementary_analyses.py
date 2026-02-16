@@ -19,6 +19,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(BASE_DIR, 'analysis')
 os.makedirs(OUT_DIR, exist_ok=True)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+IRF8_LABEL_MIN_MEAN = 0.3
 
 ###############################################################################
 # PART 1: DISCOVERY COHORT (GSE115978) - Doublet/Contamination Check
@@ -81,9 +82,14 @@ for st in sorted(adata_cd8_sub.obs['tf_subtype_v2'].unique()):
         if avail:
             cd8_sub_stats[st][sig_name] = adata_cd8_sub[mask][:, avail].X.mean()
 
+irf8_max_cluster = max(cd8_sub_stats, key=lambda k: cd8_sub_stats[k]['irf8'])
+irf8_max_value = cd8_sub_stats[irf8_max_cluster]['irf8']
+irf8_high_exists = irf8_max_value > IRF8_LABEL_MIN_MEAN
+print(f"IRF8 anchor cluster (discovery): {irf8_max_cluster} (mean IRF8={irf8_max_value:.3f})")
+
 cd8_labels_v2 = {}
 for st, stats in sorted(cd8_sub_stats.items()):
-    if stats['irf8'] > 0.3:
+    if irf8_high_exists and st == irf8_max_cluster:
         label = 'IRF8-high'
     elif stats.get('memory', 0) > 0.3 and stats['tcf7'] > 0.5:
         label = 'Memory (TCF7+)'
@@ -386,9 +392,14 @@ for st in sorted(adata_cd8_val.obs['tf_subtype'].unique()):
         'post_pct': (adata_cd8_val.obs.loc[mask, 'treatment'] == 'Post').mean() * 100,
     }
 
+val_irf8_max_cluster = max(val_subtype_stats, key=lambda k: val_subtype_stats[k]['irf8'])
+val_irf8_max_value = val_subtype_stats[val_irf8_max_cluster]['irf8']
+val_irf8_high_exists = val_irf8_max_value > IRF8_LABEL_MIN_MEAN
+print(f"IRF8 anchor cluster (validation): {val_irf8_max_cluster} (mean IRF8={val_irf8_max_value:.3f})")
+
 val_labels = {}
 for st, stats in sorted(val_subtype_stats.items()):
-    if stats['irf8'] > 0.3:
+    if val_irf8_high_exists and st == val_irf8_max_cluster:
         val_labels[st] = 'IRF8-high'
     elif stats['tcf7'] > 0.5:
         val_labels[st] = 'Memory (TCF7+)'
